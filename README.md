@@ -1,2 +1,2 @@
 # c0re
-Blank Template
+Base Template
