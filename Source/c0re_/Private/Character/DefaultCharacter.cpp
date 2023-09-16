@@ -3,26 +3,43 @@
 
 #include "Character/DefaultCharacter.h"
 
-#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
 #include "Player/DefaultPlayerState.h"
 #include "AttributeSets/HealthAttributeSet.h"
 #include "AttributeSets/StaminaAttributeSet.h"
 #include "AbilitySystemComponent/DefaultAbilitySystemComponent.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
-#include "GameplayAbility/GameplayAbilityBindings.h"
+#include "GameplayTags/DefaultGameplayTags.h"
+#include "InputComponent/DefaultEnhancedInputComponent.h"
 
 ADefaultCharacter::ADefaultCharacter()
 {
-
 
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(55.f, 96.0f);
 
 	// Create a CameraComponent	
 	FirstPersonCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
+	FirstPersonCameraComponent->SetupAttachment(GetCapsuleComponent()); // Attach the camera to the capsule
 	FirstPersonCameraComponent->SetRelativeLocation(FVector(-10.f, 0.f, 60.f)); // Position the camera
 	FirstPersonCameraComponent->bUsePawnControlRotation = true;
+
+}
+
+void ADefaultCharacter::BeginPlay()
+{
+	// Call the base class  
+	Super::BeginPlay();
+
+	// Add Input Mapping Context
+	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
+	{
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
+		{
+			Subsystem->AddMappingContext(DefaultMappingContext, 0);
+		}
+	}
 
 }
 
@@ -59,47 +76,28 @@ void ADefaultCharacter::OnRep_PlayerState()
 		HealthAttributes = DefaultPlayerState->HealthAttributes;
 
 		StaminaAttributes = DefaultPlayerState->StaminaAttributes;
-
-		InitializeAbilityBindings();
 	}
 }
 
 void ADefaultCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
-	Super::SetupPlayerInputComponent(PlayerInputComponent);
-
 	// Set up action bindings
-	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
+	if (UDefaultEnhancedInputComponent* DefaultEnhancedInputComponent = Cast<UDefaultEnhancedInputComponent>(PlayerInputComponent))
 	{
+		check(DefaultEnhancedInputComponent);
+
+		const FDefaultGameplayTags& GameplayTags = FDefaultGameplayTags::Get();
+
 		// Moving
-		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ADefaultCharacter::Move);
+		DefaultEnhancedInputComponent->BindActionByTag(InputConfig, GameplayTags.IT_Move, ETriggerEvent::Triggered, this, &ADefaultCharacter::Move);
 
 		// Looking
-		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ADefaultCharacter::Look);
+		DefaultEnhancedInputComponent->BindActionByTag(InputConfig, GameplayTags.IT_LookMouse, ETriggerEvent::Triggered, this, &ADefaultCharacter::Look);
 
 		// Jumping
-		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
-		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
+		DefaultEnhancedInputComponent->BindActionByTag(InputConfig, GameplayTags.IT_Jump,ETriggerEvent::Started, this, &ACharacter::Jump);
+		DefaultEnhancedInputComponent->BindActionByTag(InputConfig, GameplayTags.IT_Jump,ETriggerEvent::Completed, this, &ACharacter::StopJumping);
 	}
-
-	InitializeAbilityBindings();
-}
-
-void ADefaultCharacter::InitializeAbilityBindings()
-{
-	if (AbilityBindingsInitialized || !GetPlayerState() || !AbilitySystemComponent.Get() || !InputComponent)
-	{
-		return;
-	}
-
-	//AbilitySystemComponent->BindAbilityActivationToInputComponent(InputComponent, FGameplayAbilityInputBinds(
-	//	FString("ConfirmTarget"), 
-	//	FString("CancelTarget"), 
-	//	FString("EGameplayAbilityBindings"), 
-	//	static_cast<int32>(EGameplayAbilityBindings::Confirm), 
-	//	static_cast<int32>(EGameplayAbilityBindings::Cancel)));
-
-	AbilityBindingsInitialized = true;
 }
 
 void ADefaultCharacter::Look(const FInputActionValue& Value)
@@ -113,6 +111,8 @@ void ADefaultCharacter::Look(const FInputActionValue& Value)
 		AddControllerYawInput(LookAxisVector.X);
 		AddControllerPitchInput(LookAxisVector.Y);
 	}
+
+	UE_LOG(LogTemp, Warning, TEXT("LookAxisVector: %s"), *LookAxisVector.ToString());
 }
 
 void ADefaultCharacter::Move(const FInputActionValue& Value)
@@ -120,12 +120,13 @@ void ADefaultCharacter::Move(const FInputActionValue& Value)
 	// input is a Vector2D
 	FVector2D MovementVector = Value.Get<FVector2D>();
 
-	if (Controller != nullptr)
-	{
-		// add movement 
-		AddMovementInput(GetActorForwardVector(), MovementVector.Y);
-		AddMovementInput(GetActorRightVector(), MovementVector.X);
-	}
+	// add movement 
+	AddMovementInput(GetActorForwardVector(), MovementVector.Y);
+	AddMovementInput(GetActorRightVector(), MovementVector.X);
+
+	UE_LOG(LogTemp, Warning, TEXT("MovementVector: %s"), *MovementVector.ToString());
+	UE_LOG(LogTemp, Warning, TEXT("GetActorForwardVector(): %s"), *GetActorForwardVector().ToString());
+	UE_LOG(LogTemp, Warning, TEXT("GetActorRightVector(): %s"), *GetActorRightVector().ToString());
 }
 
 
